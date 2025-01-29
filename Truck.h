@@ -7,7 +7,7 @@
 #include <condition_variable>
 #include <atomic>
 
-class ConveyorBelt; 
+class ConveyorBelt;
 
 class Truck {
 private:
