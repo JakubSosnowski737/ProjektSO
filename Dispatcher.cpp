@@ -63,17 +63,17 @@ Dispatcher::~Dispatcher() {
 
 void Dispatcher::start() {
     try {
+        {
+            std::lock_guard<std::mutex> lock(logMutex);
+            std::cout << "Dyspozytor: Rozpoczeto symulacje.\n";
+        }
+
         for (auto& worker : workers) {
             worker.startWork(conveyorBelt, isRunning);
         }
 
         for (auto& truck : trucks) {
             truck.startTransport(conveyorBelt, truckQueueMutex, truckQueueCondition, activeTruckIndex, isRunning);
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(logMutex);
-            std::cout << "Dyspozytor: Rozpoczeto symulacje.\n";
         }
     }
     catch (const std::exception& e) {

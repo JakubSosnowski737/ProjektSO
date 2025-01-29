@@ -39,12 +39,14 @@ void Truck::startTransport(ConveyorBelt& conveyorBelt, std::mutex& queueMutex,
     std::condition_variable& queueCondition, int& activeTruckIndex,
     std::atomic<bool>& isRunning) {
     truckThread = std::thread([this, &conveyorBelt, &queueMutex, &queueCondition, &activeTruckIndex, &isRunning]() {
-        while (isRunning || !conveyorBelt.isEmpty()) {
+        while (isRunning || !conveyorBelt.isEmpty() || currentLoad > 0) {
             {
                 std::unique_lock<std::mutex> lock(queueMutex);
                 queueCondition.wait(lock, [&]() { return activeTruckIndex == id - 1 || !isRunning || conveyorBelt.getDispatcher().getSignalToTruck(); });
 
-                if (!isRunning && conveyorBelt.isEmpty()) break;
+                if (!isRunning && conveyorBelt.isEmpty() && currentLoad == 0) {
+                    break;
+                }
             }
 
             Brick brick(0);
@@ -53,16 +55,14 @@ void Truck::startTransport(ConveyorBelt& conveyorBelt, std::mutex& queueMutex,
                 if (conveyorBelt.loadBrick(brick)) {
                     if (!addBrick(brick)) {
                         canLoadMore = false;
-                    }
-                    else {
+                    } else {
                         {
                             std::lock_guard<std::mutex> logLock(conveyorBelt.getDispatcher().getLogMutex());
                             std::cout << "Ciezarowka " << id << " zaladowala cegle o wadze " << brick.getWeight()
                                 << ". Aktualne zaladowanie: " << currentLoad << " / " << maxWeight << ".\n";
                         }
                     }
-                }
-                else {
+                } else {
                     {
                         std::unique_lock<std::mutex> lock(queueMutex);
                         queueCondition.wait_for(lock, std::chrono::milliseconds(100), [&]() { return !conveyorBelt.isEmpty() || !isRunning || conveyorBelt.getDispatcher().getSignalToTruck(); });
@@ -73,8 +73,7 @@ void Truck::startTransport(ConveyorBelt& conveyorBelt, std::mutex& queueMutex,
             if (currentLoad > 0 || conveyorBelt.getDispatcher().getSignalToTruck()) {
                 transportToDestination(conveyorBelt, queueMutex, queueCondition, activeTruckIndex);
                 conveyorBelt.getDispatcher().resetSignalToTruck(); 
-            }
-            else {
+            } else {
                 {
                     std::lock_guard<std::mutex> lock(queueMutex);
                     activeTruckIndex = (activeTruckIndex + 1) % conveyorBelt.getDispatcher().getNumTrucks();
@@ -82,11 +81,16 @@ void Truck::startTransport(ConveyorBelt& conveyorBelt, std::mutex& queueMutex,
                 }
             }
         }
-        });
+        {
+            std::lock_guard<std::mutex> lock(conveyorBelt.getDispatcher().getLogMutex());
+            std::cout << "Ciezarowka " << id << " zakonczyl dzialanie petli.\n";
+        }
+    });
 }
 
 void Truck::join() {
     if (truckThread.joinable()) {
         truckThread.join();
+        std::cout << "Ciezarowka " << id << " zakonczyl prace.\n";
     }
 }
