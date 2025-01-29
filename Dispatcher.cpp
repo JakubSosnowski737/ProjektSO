@@ -13,21 +13,25 @@ Dispatcher::Dispatcher(int numWorkers, int numTrucks, int conveyorCapacity, int 
 
     // Inicjalizacja semafora
     if (sem_init(&sem, 0, 1) != 0) {
+        perror("Blad inicjalizacji semafora");
         throw std::runtime_error("Blad inicjalizacji semafora");
     }
 
     // Inicjalizacja pamięci dzielonej
     shm_fd = shm_open("/shared_memory", O_CREAT | O_RDWR, 0666);
     if (shm_fd == -1) {
+        perror("Blad otwarcia pamieci dzielonej");
         throw std::runtime_error("Blad otwarcia pamieci dzielonej");
     }
 
     if (ftruncate(shm_fd, sizeof(int)) == -1) {
+        perror("Blad ustawienia rozmiaru pamieci dzielonej");
         throw std::runtime_error("Blad ustawienia rozmiaru pamieci dzielonej");
     }
 
     shared_data = static_cast<int*>(mmap(0, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0));
     if (shared_data == MAP_FAILED) {
+        perror("Blad mapowania pamieci dzielonej");
         throw std::runtime_error("Blad mapowania pamieci dzielonej");
     }
 
@@ -46,9 +50,15 @@ Dispatcher::~Dispatcher() {
     sem_destroy(&sem);
 
     // Niszczenie pamięci dzielonej
-    munmap(shared_data, sizeof(int));
-    close(shm_fd);
-    shm_unlink("/shared_memory");
+    if (munmap(shared_data, sizeof(int)) == -1) {
+        perror("Blad odmapowania pamieci dzielonej");
+    }
+    if (close(shm_fd) == -1) {
+        perror("Blad zamkniecia deskryptora pamieci dzielonej");
+    }
+    if (shm_unlink("/shared_memory") == -1) {
+        perror("Blad usuniecia pamieci dzielonej");
+    }
 }
 
 void Dispatcher::start() {

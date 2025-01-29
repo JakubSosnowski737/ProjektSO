@@ -31,4 +31,3 @@ bool ConveyorBelt::isEmpty() const {
 Dispatcher& ConveyorBelt::getDispatcher() {
     return dispatcher;
 }
-

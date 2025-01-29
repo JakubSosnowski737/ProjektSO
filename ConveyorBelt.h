@@ -8,6 +8,7 @@
 class Dispatcher;
 
 class ConveyorBelt {
+private:
     int capacity;
     int maxWeight;
     int currentWeight;
