@@ -1,96 +1,73 @@
 #include "Truck.h"
-#include "Dispatcher.h"
+#include <unistd.h>
 #include <iostream>
-#include <chrono>
+#include <csignal>
+#include <sys/sem.h>
 
-Truck::Truck(int id, int maxWeight, int returnTime) : id(id), maxWeight(maxWeight), currentLoad(0), returnTime(returnTime) {}
+Truck::Truck(int id, SharedData* sharedData, int msgQueueId)
+    : id(id), sharedData(sharedData), msgQueueId(msgQueueId), running(true) {
+    // USUNIĘTO rejestrację handlerów sygnałów
+}
+void Truck::start() {
+    while (running) {
+        // Sprawdź, czy są komunikaty w kolejce
+        Message msg;
+        if (msgrcv(msgQueueId, &msg, sizeof(msg.signal), MSG_TYPE_SIGNAL, IPC_NOWAIT) != -1) {
+            handleSignal(msg.signal);
+        }
 
-bool Truck::addBrick(const Brick& brick) {
-    if (currentLoad + brick.getWeight() <= maxWeight) {
-        currentLoad += brick.getWeight();
-        return true;
+        // Sprawdź, czy ciężarówka nadal działa
+        if (!running) break;
+
+        loadBricks();
+        sleep(sharedData->truckTime); // Symulacja czasu jazdy
     }
-    return false;
+
+    std::cout << "Ciężarówka T" << id << " zakończyła pracę\n";
 }
 
-void Truck::transportToDestination(ConveyorBelt& conveyorBelt, std::mutex& queueMutex,
-    std::condition_variable& queueCondition, int& activeTruckIndex) {
-        {
-            std::lock_guard<std::mutex> lock(conveyorBelt.getDispatcher().getLogMutex());
-            std::cout << "Ciezarowka " << id << " transportuje cegly o wadze " << currentLoad << ".\n";
-        }
+void Truck::loadBricks() {
+    struct sembuf semOp;
+    semOp.sem_num = 0;
+    semOp.sem_op = -1; // Zajmij semafor
+    semOp.sem_flg = 0;
 
-        {
-            std::lock_guard<std::mutex> lock(queueMutex);
-            activeTruckIndex = (activeTruckIndex + 1) % conveyorBelt.getDispatcher().getNumTrucks();
-            queueCondition.notify_all();
-        }
-
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        {
-            std::lock_guard<std::mutex> lock(conveyorBelt.getDispatcher().getLogMutex());
-            std::cout << "Ciezarowka " << id << " wraca do cegielni.\n";
-        }
-        currentLoad = 0;
-        std::this_thread::sleep_for(std::chrono::seconds(returnTime));
-}
-
-void Truck::startTransport(ConveyorBelt& conveyorBelt, std::mutex& queueMutex,
-    std::condition_variable& queueCondition, int& activeTruckIndex,
-    std::atomic<bool>& isRunning) {
-    truckThread = std::thread([this, &conveyorBelt, &queueMutex, &queueCondition, &activeTruckIndex, &isRunning]() {
-        while (isRunning || !conveyorBelt.isEmpty() || currentLoad > 0) {
-            {
-                std::unique_lock<std::mutex> lock(queueMutex);
-                queueCondition.wait(lock, [&]() { return activeTruckIndex == id - 1 || !isRunning || conveyorBelt.getDispatcher().getSignalToTruck(); });
-
-                if (!isRunning && conveyorBelt.isEmpty() && currentLoad == 0) {
-                    break;
-                }
-            }
-
-            Brick brick(0);
-            bool canLoadMore = true;
-            while (currentLoad < maxWeight && canLoadMore && isRunning && !conveyorBelt.getDispatcher().getSignalToTruck()) {
-                if (conveyorBelt.loadBrick(brick)) {
-                    if (!addBrick(brick)) {
-                        canLoadMore = false;
-                    } else {
-                        {
-                            std::lock_guard<std::mutex> logLock(conveyorBelt.getDispatcher().getLogMutex());
-                            std::cout << "Ciezarowka " << id << " zaladowala cegle o wadze " << brick.getWeight()
-                                << ". Aktualne zaladowanie: " << currentLoad << " / " << maxWeight << ".\n";
-                        }
-                    }
-                } else {
-                    {
-                        std::unique_lock<std::mutex> lock(queueMutex);
-                        queueCondition.wait_for(lock, std::chrono::milliseconds(100), [&]() { return !conveyorBelt.isEmpty() || !isRunning || conveyorBelt.getDispatcher().getSignalToTruck(); });
-                    }
-                }
-            }
-
-            if (currentLoad > 0 || conveyorBelt.getDispatcher().getSignalToTruck()) {
-                transportToDestination(conveyorBelt, queueMutex, queueCondition, activeTruckIndex);
-                conveyorBelt.getDispatcher().resetSignalToTruck(); 
-            } else {
-                {
-                    std::lock_guard<std::mutex> lock(queueMutex);
-                    activeTruckIndex = (activeTruckIndex + 1) % conveyorBelt.getDispatcher().getNumTrucks();
-                    queueCondition.notify_all();
-                }
-            }
-        }
-        {
-            std::lock_guard<std::mutex> lock(conveyorBelt.getDispatcher().getLogMutex());
-            std::cout << "Ciezarowka " << id << " zakonczyl dzialanie petli.\n";
-        }
-    });
-}
-
-void Truck::join() {
-    if (truckThread.joinable()) {
-        truckThread.join();
-        std::cout << "Ciezarowka " << id << " zakonczyl prace.\n";
+    if (semop(sharedData->semId, &semOp, 1) == -1) {
+        perror("semop nie powiodło się");
+        exit(EXIT_FAILURE);
     }
+
+    if (sharedData->currentTapeCount > 0) {
+        // Sprawdź, czy dodanie kolejnej cegły przekroczy ładowność ciężarówki
+        if (sharedData->currentTapeWeight + sharedData->currentTapeCount > sharedData->truckCapacity) {
+            std::cout << "Ciężarówka T" << id << " odjeżdża z niepełnym ładunkiem (" << sharedData->currentTapeWeight << "/" << sharedData->truckCapacity << ")\n";
+            sharedData->currentTapeCount = 0;
+            sharedData->currentTapeWeight = 0;
+        } else {
+            std::cout << "Ciężarówka T" << id << " załadowała cegły (" << sharedData->currentTapeWeight << "/" << sharedData->truckCapacity << ")\n";
+            sharedData->currentTapeCount = 0;
+            sharedData->currentTapeWeight = 0;
+        }
+    }
+
+    semOp.sem_op = 1; // Zwolnij semafor
+    if (semop(sharedData->semId, &semOp, 1) == -1) {
+        perror("semop nie powiodło się");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void Truck::handleSignal(int signal) {
+    if (signal == 1) {
+        std::cout << "Ciężarówka T" << id << " odjeżdża z niepełnym ładunkiem\n";
+        loadBricks(); // Załaduj dostępne cegły
+        running = false; // Zakończ pracę ciężarówki
+    } else if (signal == 2) {
+        std::cout << "Ciężarówka T" << id << " kończy pracę\n";
+        running = false;
+    }
+}
+
+void Truck::signalHandler(int signum) {
+    // Pusta implementacja, ponieważ obsługa sygnałów jest w handleSignal
 }

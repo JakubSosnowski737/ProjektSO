@@ -1,22 +1,21 @@
 #ifndef WORKER_H
 #define WORKER_H
 
-#include "ConveyorBelt.h"
-#include <atomic>
-#include <thread>
-
-class ConveyorBelt;
+#include "SharedData.h"
 
 class Worker {
+public:
+    Worker(int id, SharedData* sharedData, int msgQueueId);
+    void start();
+
 private:
     int id;
-    int brickWeight;
-    std::thread workerThread;
-
-public:
-    Worker(int id, int brickWeight);
-    void startWork(ConveyorBelt& conveyorBelt, std::atomic<bool>& isRunning);
-    void join();
+    SharedData* sharedData;
+    int msgQueueId;
+    bool running; // Dodano zmienną running
+    void addBrick(int weight);
+    void handleSignal(int signal);
+    static void signalHandler(int signum);
 };
 
-#endif
+#endif // WORKER_H
