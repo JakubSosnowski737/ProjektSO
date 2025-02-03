@@ -71,8 +71,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // METODA 2: Otwarcie FIFO do odczytu już na początku,
-    // aby FIFO było "podłączone" do czytelnika przez cały czas działania programu.
+
     int fifo_fd_main = open(FIFO_NAME, O_RDONLY | O_NONBLOCK);
     if(fifo_fd_main == -1) {
         perror("open FIFO for reading");
