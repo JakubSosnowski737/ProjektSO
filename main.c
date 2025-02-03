@@ -16,6 +16,7 @@
 #include "truck.h"
 #include "sysresources.h"
 
+
 // Globalne identyfikatory dla zasobów System V:
 int semid;  // Globalny identyfikator zestawu semaforów System V
 int msgid;  // Globalny identyfikator kolejki komunikatów System V
