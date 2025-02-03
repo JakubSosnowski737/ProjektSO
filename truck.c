@@ -44,7 +44,7 @@ void run_truck(SharedData *shared, int truck_capacity, int delivery_time, int tr
             sleep(1);
         }
 
-        // Sprawdzamy stan taśmy i pracowników
+        // Sprawdzamy stan taśmy i pracowników.
         sem_P(0);
         int remaining = shared->belt.count;
         int local_workers = shared->active_workers;
@@ -59,13 +59,13 @@ void run_truck(SharedData *shared, int truck_capacity, int delivery_time, int tr
         }
 
         int cargo = 0;
-        // Pętla ładowania cegieł
+        // Pętla ładowania cegieł.
         while (cargo < truck_capacity) {
             if (force_depart) {
                 printf("Ciężarówka %d: Otrzymałam sygnał wymuszonego odjazdu.\n", truck_id);
                 break;
             }
-            // Używamy operacji trywait na semaforze bricks_available (indeks 1)
+            // Używamy trywait na semaforze bricks_available (indeks 1).
             struct sembuf op = {1, -1, IPC_NOWAIT};
             if (semop(semid, &op, 1) == -1) {
                 if (errno == EAGAIN) {
@@ -95,7 +95,7 @@ void run_truck(SharedData *shared, int truck_capacity, int delivery_time, int tr
                     printf("Ciężarówka %d: Załadowano cegłę o wadze %d od P%d. Ładunek: %d/%d.\n",
                            truck_id, b.weight, b.worker_id, cargo, truck_capacity);
                 } else {
-                    // Jeśli następna cegła nie mieści się – wychodzimy natychmiast
+                    // Jeśli kolejna cegła nie mieści się, natychmiast wychodzimy.
                     sem_V(0);
                     break;
                 }
@@ -103,7 +103,7 @@ void run_truck(SharedData *shared, int truck_capacity, int delivery_time, int tr
             sem_V(0);
         } // koniec pętli ładowania
 
-        // Zwalniamy miejsce przy taśmie
+        // Zwalniamy miejsce przy taśmie.
         sem_P(2);
         shared->current_truck = 0;
         sem_V(2);
@@ -113,7 +113,7 @@ void run_truck(SharedData *shared, int truck_capacity, int delivery_time, int tr
             printf("Ciężarówka %d: Niepełny ładunek (%d). Odjeżdżam (na polecenie lub brak cegieł).\n", truck_id, cargo);
         }
         
-        // Wysyłamy komunikat do kolejki komunikatów
+        // Wysyłamy komunikat do kolejki komunikatów.
         struct msgbuf msg;
         msg.mtype = truck_id;
         snprintf(msg.mtext, sizeof(msg.mtext), "Ciężarówka %d: Dostarczyła ładunek %d.", truck_id, cargo);
@@ -121,13 +121,15 @@ void run_truck(SharedData *shared, int truck_capacity, int delivery_time, int tr
             perror("msgsnd error in truck");
         }
         
-        // Zapisujemy log do FIFO
-        int fifo_fd = open(FIFO_NAME, O_WRONLY | O_NONBLOCK);
+        // Zapisujemy log do FIFO. Otwieramy FIFO do zapisu (tryb O_WRONLY).
+        int fifo_fd = open(FIFO_NAME, O_WRONLY);
         if (fifo_fd != -1) {
             char fifo_msg[128];
             snprintf(fifo_msg, sizeof(fifo_msg), "Ciężarówka %d: Rozwożę cegły...\n", truck_id);
             write(fifo_fd, fifo_msg, strlen(fifo_msg));
             close(fifo_fd);
+        } else {
+            perror("open FIFO for writing in truck");
         }
         
         printf("Ciężarówka %d: Rozwożę cegły...\n", truck_id);

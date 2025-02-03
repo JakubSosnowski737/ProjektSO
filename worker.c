@@ -45,11 +45,11 @@ void run_worker(SharedData *shared, int worker_id, int brick_weight) {
             sem_V(0); // unlock belt_mutex
             struct timespec delay;
             delay.tv_sec = 0;
-            delay.tv_nsec = (50 + rand() % 101) * 1000000L;
+            delay.tv_nsec = (50 + rand() % 101) * 1000000L; // 50-150 ms
             nanosleep(&delay, NULL);
         } else {
             sem_V(0);
-            struct timespec req = {0, 100000000};
+            struct timespec req = {0, 100000000}; // 100 ms
             nanosleep(&req, NULL);
         }
     }

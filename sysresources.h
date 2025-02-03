@@ -5,9 +5,11 @@
 #include <sys/sem.h>
 #include <sys/msg.h>
 
-extern int semid;  // Globalny identyfikator zestawu semaforów System V
-extern int msgid;  // Globalny identyfikator kolejki komunikatów System V
+// Globalne identyfikatory zasobów System V
+extern int semid;  // Identyfikator zestawu semaforów System V
+extern int msgid;  // Identyfikator kolejki komunikatów System V
 
+// Nazwa FIFO (łącza nazwanego)
 #define FIFO_NAME "logfifo"
 
 // Definicja struktury komunikatu dla kolejki System V.

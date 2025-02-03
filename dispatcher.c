@@ -14,11 +14,11 @@
 #define RESET_COLOR "\033[0m"
 
 void run_dispatcher(SharedData *shared, pid_t *worker_pids, int num_workers) {
-    int interval_signal1 = 20;      
-    int simulation_duration = 30;   
+    int interval_signal1 = 8;      // co 10 sekund
+    int simulation_duration = 30;   // 60 sekund symulacji
     int elapsed = 0;
     
-    printf(DISPATCHER_COLOR "Dyspozytor: Rozpoczynam pracę.\n" RESET_COLOR);
+    printf(DISPATCHER_COLOR "Dyspozytor: Automatyczne wysyłanie sygnałów rozpoczęte.\n" RESET_COLOR);
     fflush(stdout);
     
     while (elapsed < simulation_duration) {
@@ -30,7 +30,7 @@ void run_dispatcher(SharedData *shared, pid_t *worker_pids, int num_workers) {
         pid_t truck_pid = shared->current_truck;
         sem_V(2);
         if (truck_pid != 0) {
-            printf(DISPATCHER_COLOR "Dyspozytor: Automatycznie wysyłam SIGUSR1 do ciężarówki.\n" RESET_COLOR);
+            printf(DISPATCHER_COLOR "Dyspozytor: Automatycznie wysyłam SIGUSR1 do ciężarówki (aktualnie zajęta miejsce przy taśmie).\n" RESET_COLOR);
             fflush(stdout);
             kill(truck_pid, SIGUSR1);
         } else {
@@ -45,7 +45,7 @@ void run_dispatcher(SharedData *shared, pid_t *worker_pids, int num_workers) {
         kill(worker_pids[i], SIGUSR2);
     }
     
-    // Ustawiamy flagę zakończenia symulacji (używamy semaforu belt_mutex – indeks 0)
+    // Ustawiamy flagę zakończenia symulacji (semafor belt_mutex, indeks 0)
     sem_P(0);
     shared->simulation_finished = 1;
     sem_V(0);

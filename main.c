@@ -170,7 +170,7 @@ int main(int argc, char *argv[]) {
         perror("msgrcv");
     }
 
-    // Odczytujemy komunikaty z FIFO za pomocą uchwytu fifo_fd_main.
+    // Odczytujemy komunikaty z FIFO przy użyciu uchwytu fifo_fd_main.
     printf("Odebrane komunikaty z FIFO:\n");
     char fifo_buf[256];
     ssize_t n;
