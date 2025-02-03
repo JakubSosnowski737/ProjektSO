@@ -4,7 +4,12 @@
 #include <semaphore.h>
 #include <sys/types.h>
 
-#define MAX_K 100  // Maksymalna liczba cegieł, czyli rozmiar tablicy taśmy
+// Maksymalne wartości dla danych wejściowych:
+#define MAX_K 100   // Maksymalna liczba cegieł na taśmie
+#define MAX_M 100   // Maksymalna masa cegieł na taśmie
+#define MAX_C 300   // Maksymalna ładowność ciężarówki
+#define MAX_N 10    // Maksymalna liczba ciężarówek
+#define MAX_T 100   // Maksymalny czas powrotu ciężarówki (w sekundach)
 
 // Struktura reprezentująca pojedynczą cegłę
 typedef struct {

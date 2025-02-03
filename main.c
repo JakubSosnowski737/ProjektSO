@@ -16,6 +16,7 @@
 #include "truck.h"
 #include "sysresources.h"
 
+// Globalne identyfikatory dla zasobów System V:
 int semid;  // Globalny identyfikator zestawu semaforów System V
 int msgid;  // Globalny identyfikator kolejki komunikatów System V
 
@@ -35,22 +36,47 @@ int main(int argc, char *argv[]) {
     int num_trucks = atoi(argv[4]);
     int T = atoi(argv[5]);
 
-    // Rozszerzone sprawdzanie danych wejściowych: wszystkie parametry muszą być dodatnie.
+    // Sprawdzamy, czy wszystkie argumenty są dodatnie.
     if(K <= 0 || M <= 0 || C <= 0 || num_trucks <= 0 || T <= 0) {
         fprintf(stderr, "Wszystkie argumenty muszą być dodatnimi liczbami.\n");
         exit(1);
     }
+    // Sprawdzamy maksymalne wartości.
     if(K > MAX_K) {
         fprintf(stderr, "K nie może być większe niż %d\n", MAX_K);
         exit(1);
     }
+    if(M > MAX_M) {
+        fprintf(stderr, "M nie może być większe niż %d\n", MAX_M);
+        exit(1);
+    }
+    if(C > MAX_C) {
+        fprintf(stderr, "C nie może być większe niż %d\n", MAX_C);
+        exit(1);
+    }
+    if(num_trucks > MAX_N) {
+        fprintf(stderr, "N nie może być większe niż %d\n", MAX_N);
+        exit(1);
+    }
+    if(T > MAX_T) {
+        fprintf(stderr, "T nie może być większe niż %d\n", MAX_T);
+        exit(1);
+    }
 
-    // Tworzymy FIFO.
+    // Tworzymy FIFO (nazywane potok) – zostanie utworzone w katalogu, z którego uruchamiasz program.
     if(mkfifo(FIFO_NAME, 0666) == -1) {
         if(errno != EEXIST) {
             perror("mkfifo");
             exit(1);
         }
+    }
+
+    // METODA 2: Otwarcie FIFO do odczytu już na początku,
+    // aby FIFO było "podłączone" do czytelnika przez cały czas działania programu.
+    int fifo_fd_main = open(FIFO_NAME, O_RDONLY | O_NONBLOCK);
+    if(fifo_fd_main == -1) {
+        perror("open FIFO for reading");
+        exit(1);
     }
 
     // Generujemy klucze przy użyciu ftok.
@@ -78,7 +104,8 @@ int main(int argc, char *argv[]) {
     shared->active_workers = 3;
     shared->current_truck = 0;
 
-    // Tworzymy zestaw semaforów System V (3 semafory: 0 - belt_mutex, 1 - bricks_available, 2 - truck_mutex).
+    // Tworzymy zestaw semaforów System V (3 semafory: 
+    // 0 - belt_mutex, 1 - bricks_available, 2 - truck_mutex).
     semid = semget(key_sem, 3, IPC_CREAT | 0666);
     if(semid < 0) { perror("semget"); exit(1); }
     if(semctl(semid, 0, SETVAL, 1) == -1) { perror("semctl belt_mutex"); exit(1); }
@@ -143,20 +170,15 @@ int main(int argc, char *argv[]) {
         perror("msgrcv");
     }
 
-    // Odczytujemy komunikaty z FIFO.
-    int fifo_fd = open(FIFO_NAME, O_RDONLY | O_NONBLOCK);
-    if(fifo_fd != -1) {
-        char fifo_buf[256];
-        ssize_t n;
-        printf("Odebrane komunikaty z FIFO:\n");
-        while((n = read(fifo_fd, fifo_buf, sizeof(fifo_buf)-1)) > 0) {
-            fifo_buf[n] = '\0';
-            printf("%s", fifo_buf);
-        }
-        close(fifo_fd);
-    } else {
-        perror("open fifo");
+    // Odczytujemy komunikaty z FIFO za pomocą uchwytu fifo_fd_main.
+    printf("Odebrane komunikaty z FIFO:\n");
+    char fifo_buf[256];
+    ssize_t n;
+    while((n = read(fifo_fd_main, fifo_buf, sizeof(fifo_buf)-1)) > 0) {
+        fifo_buf[n] = '\0';
+        printf("%s", fifo_buf);
     }
+    close(fifo_fd_main);
 
     // Sprzątamy: usuwamy zestaw semaforów, kolejkę komunikatów, segment pamięci oraz FIFO.
     if(semctl(semid, 0, IPC_RMID) == -1) {
